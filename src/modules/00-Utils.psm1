@@ -45,9 +45,8 @@ function Show-ConsentGate {
 
   Clear-Host
   Show-CardinalBanner
-  Start-Sleep -Milliseconds 400
+  Start-Sleep -Milliseconds 150
 
-  # High level only (harder to bypass, but still truthful)
   $plain = @"
 $ProductName will perform a local system audit and generate a report.
 
@@ -80,7 +79,7 @@ Continue?
     switch ($ans.Trim().ToLower()) {
       "y" { return $true }
       "n" { return $false }
-      default { Write-Host "Please type Y or N." }
+      default { Write-Host "Please type Y or N." -ForegroundColor Yellow }
     }
   }
 }
