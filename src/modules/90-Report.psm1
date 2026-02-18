@@ -1,5 +1,8 @@
 function Write-JsonReport {
-  param([Parameter(Mandatory)][object]$Object, [Parameter(Mandatory)][string]$Path)
+  param(
+    [Parameter(Mandatory)][object]$Object,
+    [Parameter(Mandatory)][string]$Path
+  )
   ($Object | ConvertTo-Json -Depth 12) | Set-Content -Path $Path -Encoding UTF8
 }
 
@@ -24,27 +27,35 @@ function New-SummarySection {
   $sum += "Defender present: $($Report.Defender.Present)"
   if ($Report.Defender.Present) { $sum += "Defender enabled: $($Report.Defender.AntivirusEnabled)" }
   $sum += "Prefetch files inventoried: $($Report.Prefetch.Count)"
+  $sum += "Logitech file hits: $($Report.Logitech.HitCount)"
   $sum += "Monitors found: $($Report.Monitors.Count)"
   $sum += "PCIe hints: $($Report.PCIe.SuspiciousHints.Count)"
   $sum += "Steam IDs found: $($Report.Accounts.Steam.SteamIds.Count)"
   if (-not $Report.Context.NetworkLookups) { $sum += "VAC checks skipped (network disabled)" }
+
   return $sum
 }
 
 function Write-TextReport {
-  param([Parameter(Mandatory)][object]$Object, [Parameter(Mandatory)][string]$Path)
+  param(
+    [Parameter(Mandatory)][object]$Object,
+    [Parameter(Mandatory)][string]$Path
+  )
 
   $L = New-Object System.Collections.Generic.List[string]
 
+  # Header
   $L.Add("Cardinal.AC - Audit Report")
   $L.Add("Timestamp: $($Object.Context.Timestamp)")
   $L.Add("RequestedBy: $($Object.Context.RequestedBy)")
   $L.Add("Host: $($Object.Context.Hostname)  User: $($Object.Context.User)  Admin: $($Object.Context.IsAdmin)")
   $L.Add("NetworkLookups: $($Object.Context.NetworkLookups)")
 
+  # Summary
   Add-Section $L "SUMMARY"
   foreach ($s in $Object.Summary) { $L.Add("- " + $s) }
 
+  # System
   Add-Section $L "SYSTEM"
   $L.Add("OS: $($Object.System.OS.Caption)")
   $L.Add("Version: $($Object.System.OS.Version)  Build: $($Object.System.OS.Build)  Arch: $($Object.System.OS.Arch)")
@@ -52,6 +63,7 @@ function Write-TextReport {
   $L.Add("CPU: $($Object.System.CPU)")
   $L.Add("RAM(GB): $($Object.System.RAM_GB)")
 
+  # Defender
   Add-Section $L "WINDOWS DEFENDER"
   $def = $Object.Defender
   $L.Add("Present: $($def.Present)")
@@ -74,6 +86,7 @@ function Write-TextReport {
     if ($t.ExecutionPath) { $L.Add("   Path: $($t.ExecutionPath)") }
   }
 
+  # System Security
   Add-Section $L "SYSTEM SECURITY"
   $sec = $Object.SystemSecurity
   $L.Add("SecureBoot: $($sec.SecureBoot)")
@@ -85,6 +98,7 @@ function Write-TextReport {
     if ($sec.AllowedBusesNote) { $L.Add("Note: $($sec.AllowedBusesNote)") }
   }
 
+  # Discord safe checks
   Add-Section $L "DISCORD (SAFE CHECKS)"
   $dc = $Object.Discord
   $L.Add("DiscordRunning: $($dc.DiscordRunning)")
@@ -92,6 +106,7 @@ function Write-TextReport {
   $L.Add("ModIndicators: " + (($dc.ModIndicators -join ", ")))
   $L.Add("Note: $($dc.Note)")
 
+  # Files
   Add-Section $L "FILES (RAR/EXE INVENTORY + HEURISTIC HITS)"
   $L.Add("OneDrivePath: $($Object.Files.OneDrivePath)")
   $L.Add("Targets: " + (($Object.Files.Targets -join "; ")))
@@ -106,10 +121,16 @@ function Write-TextReport {
     $L.Add(" - $($h.Path) | $($h.Why) | $($h.LastWrite)")
   }
 
+  # Registry traces
   Add-Section $L "REGISTRY EXECUTION TRACES (BEST EFFORT)"
   $r = $Object.Registry
+
+  if ($r.BAM_Note) { $L.Add("BAM Note: $($r.BAM_Note)") }
+
   $L.Add("BAM entries: $($r.BAM.Count)")
-  foreach ($e in ($r.BAM | Select-Object -First 120)) { $L.Add(" - $($e.UserKey): $($e.Entry)") }
+  foreach ($e in ($r.BAM | Select-Object -First 120)) {
+    $L.Add(" - $($e.UserKey): $($e.Entry)")
+  }
 
   $L.Add("")
   $L.Add("CompatibilityAssistant entries: $($r.CompatibilityAssistant.Count)")
@@ -126,6 +147,7 @@ function Write-TextReport {
   $L.Add("")
   $L.Add("Browsers: " + (($r.Browsers -join ", ")))
 
+  # Prefetch
   Add-Section $L "PREFETCH"
   $pf = $Object.Prefetch
   $L.Add("Present: $($pf.Present) | Path: $($pf.Path) | Count: $($pf.Count)")
@@ -134,12 +156,24 @@ function Write-TextReport {
     $L.Add(" - $($p.Name) | $($p.LastWriteTime)")
   }
 
+  # Logitech
+  Add-Section $L "LOGITECH (G HUB / LGS AUDIT)"
+  $lg = $Object.Logitech
+  $L.Add("HitCount: $($lg.HitCount)")
+  $L.Add("CheckedPaths: " + ($lg.CheckedPaths -join "; "))
+  $L.Add("Note: $($lg.Note)")
+  foreach ($f in ($lg.Files | Select-Object -First 120)) {
+    $L.Add(" - $($f.Source) | $($f.Path) | $($f.LastWriteTime)")
+  }
+
+  # Monitors
   Add-Section $L "MONITORS / EDID"
   $L.Add("MonitorCount: $($Object.Monitors.Count)")
   foreach ($m in $Object.Monitors.Items) {
     $L.Add(" - $($m.Manufacturer) | $($m.Name) | Serial:$($m.Serial) | Y:$($m.Year) W:$($m.Week)")
   }
 
+  # PCIe
   Add-Section $L "PCIe DEVICES"
   $L.Add("DeviceCount: $($Object.PCIe.Count)")
   $L.Add("SuspiciousHintsCount: $($Object.PCIe.SuspiciousHints.Count)")
@@ -147,12 +181,15 @@ function Write-TextReport {
     $L.Add(" - $($x.Name) | [$($x.Why -join ', ')] | $($x.PNPDeviceID)")
   }
 
+  # Accounts
   Add-Section $L "ACCOUNTS (STEAM / UBISOFT)"
   $acc = $Object.Accounts
+
   $L.Add("Steam Found: $($acc.Steam.Found)")
   if ($acc.Steam.Found) {
     $L.Add("Steam VDF: $($acc.Steam.Path)")
     $L.Add("SteamIDs: " + (($acc.Steam.SteamIds -join ", ")))
+
     if ($acc.Steam.VacChecks.Count -gt 0) {
       foreach ($c in $acc.Steam.VacChecks) {
         $L.Add(" - $($c.SteamId64): VAC=$($c.Vac.VacBanMarker) GAMEBAN=$($c.Vac.GameBanMarker) COMMUNITYBAN=$($c.Vac.CommunityBanMarker) Checked=$($c.Vac.Checked)")
@@ -165,6 +202,7 @@ function Write-TextReport {
   $L.Add("Ubisoft Present: $($acc.Ubisoft.Present)")
   if ($acc.Ubisoft.Present) { $L.Add("Ubisoft Path: $($acc.Ubisoft.Path)") }
 
+  # Write file
   $L | Set-Content -Path $Path -Encoding UTF8
 }
 
