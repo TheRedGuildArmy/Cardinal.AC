@@ -1,26 +1,26 @@
 function Get-LogitechSection {
-  # This checks common Logitech locations for macro/script files.
-  # It does NOT run scripts — it only lists what exists for auditing.
+
+  # Audits Logitech G HUB / LGS script locations.
+  # This does NOT execute scripts.
+  # It only inventories files for transparency.
 
   $hits = @()
 
-  # Logitech G HUB scripts folder (your original script)
+  # Logitech G HUB scripts folder
   $ghubScripts = Join-Path $env:LOCALAPPDATA "LGHUB\scripts"
 
-  # Logitech Gaming Software (older)
+  # Older Logitech Gaming Software folders
   $lgsPaths = @(
     Join-Path $env:APPDATA "Logitech",
     Join-Path $env:LOCALAPPDATA "Logitech"
   )
 
-  # Helper: safely list files under a folder
   function Add-FilesFromFolder {
     param([string]$Folder, [string]$Label)
 
     if (-not (Test-Path $Folder)) { return }
 
     try {
-      # Limit listing to avoid huge reports
       $files = Get-ChildItem -Path $Folder -Recurse -File -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTime -Descending |
         Select-Object -First 250
@@ -37,9 +37,7 @@ function Get-LogitechSection {
       $hits += [ordered]@{
         Source = $Label
         Path = $Folder
-        LastWriteTime = $null
-        SizeBytes = $null
-        Note = "Error listing folder (permissions or path issue)."
+        Note = "Error listing folder."
       }
     }
   }
@@ -55,7 +53,7 @@ function Get-LogitechSection {
     CheckedPaths = @($ghubScripts) + $lgsPaths
     HitCount = $hits.Count
     Files = $hits
-    Note = "This section lists Logitech-related script/config files for auditing. Presence alone is not proof of misuse."
+    Note = "Presence of Logitech scripts does not imply misuse."
   }
 }
 
